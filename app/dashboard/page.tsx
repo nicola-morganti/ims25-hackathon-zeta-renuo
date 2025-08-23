@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Calendar, Clock, MapPin, Train, Bus, Car, Plus, Settings, LogOut, Upload, Route } from "lucide-react";
+import { Calendar, Clock, MapPin, Train, Settings, LogOut, Upload, Route } from "lucide-react";
 
 interface Event {
   id: string;
@@ -17,13 +17,40 @@ interface Event {
   color: string;
 }
 
+interface SBBConnection {
+  from: {
+    station: { name: string };
+    departure?: string;
+  };
+  to: {
+    station: { name: string };
+    arrival?: string;
+  };
+  duration: string;
+  sections: Array<{
+    journey?: { category: string };
+    walk?: boolean;
+  }>;
+  price?: string;
+}
+
+interface TransformedConnection {
+  id: string;
+  from: string;
+  to: string;
+  departure: string;
+  arrival: string;
+  duration: string;
+  transport: string[];
+  price?: string;
+}
+
 export default function Dashboard() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const [showOvModal, setShowOvModal] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [events, setEvents] = useState<Event[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -41,7 +68,7 @@ export default function Dashboard() {
       const data = await response.json();
       
       if (response.ok) {
-        const formattedEvents = data.events.map((event: any) => ({
+        const formattedEvents = data.events.map((event: { id: string; title: string; startTime: string; endTime: string; location?: string; address?: string; color: string }) => ({
           id: event.id,
           title: event.title,
           startTime: new Date(event.startTime).toLocaleTimeString('de-CH', { 
@@ -62,8 +89,6 @@ export default function Dashboard() {
       }
     } catch (error) {
       console.error("Error loading events:", error);
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -352,7 +377,7 @@ function OvConnectionModal({ onClose }: { onClose: () => void }) {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [transportType, setTransportType] = useState("all");
-  const [connections, setConnections] = useState<any[]>([]);
+  const [connections, setConnections] = useState<TransformedConnection[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -379,14 +404,14 @@ function OvConnectionModal({ onClose }: { onClose: () => void }) {
 
       if (response.ok && data.connections) {
         // Transform SBB API response to our format
-        const transformedConnections = data.connections.slice(0, 5).map((connection: any, index: number) => ({
+        const transformedConnections = data.connections.slice(0, 5).map((connection: SBBConnection, index: number) => ({
           id: index.toString(),
           from: connection.from.station.name,
           to: connection.to.station.name,
-          departure: connection.from.departure?.slice(11, 16) || connection.from.departure,
-          arrival: connection.to.arrival?.slice(11, 16) || connection.to.arrival,
+          departure: connection.from.departure?.slice(11, 16) || connection.from.departure || '',
+          arrival: connection.to.arrival?.slice(11, 16) || connection.to.arrival || '',
           duration: connection.duration,
-          transport: connection.sections.map((section: any) => 
+          transport: connection.sections.map((section) => 
             section.journey?.category || section.walk ? 'Fussweg' : 'Unbekannt'
           ).filter((transport: string) => transport !== 'Unbekannt'),
           price: connection.price

@@ -47,11 +47,21 @@ export async function POST(req: NextRequest) {
   }
 }
 
+interface ICSEvent {
+  userId: string;
+  title: string;
+  description?: string;
+  location?: string;
+  address?: string;
+  startTime: Date;
+  endTime: Date;
+}
+
 function parseICSFile(content: string, userId: string) {
-  const events: any[] = [];
+  const events: ICSEvent[] = [];
   const lines = content.split('\n');
   
-  let currentEvent: any = {};
+  let currentEvent: Partial<ICSEvent> = { userId };
   let inEvent = false;
 
   for (let i = 0; i < lines.length; i++) {
@@ -65,7 +75,12 @@ function parseICSFile(content: string, userId: string) {
     
     if (line === 'END:VEVENT') {
       if (currentEvent.title && currentEvent.startTime) {
-        events.push(currentEvent);
+        // If no endTime is set, use startTime + 1 hour as default
+        const eventWithEndTime: ICSEvent = {
+          ...currentEvent as ICSEvent,
+          endTime: currentEvent.endTime || new Date(currentEvent.startTime.getTime() + 60 * 60 * 1000)
+        };
+        events.push(eventWithEndTime);
       }
       inEvent = false;
       continue;

@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const date = searchParams.get("date");
 
-    let whereClause: any = { userId: session.user.id };
+    const whereClause: { userId: string; startTime?: { gte: Date; lte: Date } } = { userId: session.user.id };
     
     if (date) {
       const startOfDay = new Date(date);
