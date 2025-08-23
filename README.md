@@ -47,7 +47,7 @@ Diese Next.js-Anwendung ermöglicht es Studenten, ihren Stundenplan zu verwalten
 
 ### 1. Repository klonen
 ```bash
-git clone <repository-url>
+git clone https://github.com/nicola-morganti/ims25-hackathon-zeta-renuo.git
 cd ims25-hackathon-zeta-renuo
 ```
 
