@@ -10,7 +10,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 
-export function LoginForm({
+export function RegisterForm({
   className,
   ...props
 }: React.ComponentProps<"div">) {
@@ -18,9 +18,9 @@ export function LoginForm({
     <div className={cn("flex flex-col gap-6", className)} {...props}>
       <Card>
         <CardHeader>
-          <CardTitle>Bei Ihrem Konto anmelden</CardTitle>
+          <CardTitle>Konto erstellen</CardTitle>
           <CardDescription>
-            Geben Sie Ihre E-Mail-Adresse ein, um sich bei Ihrem Konto anzumelden
+            Geben Sie Ihre E-Mail-Adresse ein, um sich zu registrieren
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -39,16 +39,20 @@ export function LoginForm({
                 <Label htmlFor="password">Passwort</Label>
                 <Input id="password" type="password" required />
               </div>
+              <div className="grid gap-3">
+                <Label htmlFor="confirmPassword">Passwort bestätigen</Label>
+                <Input id="confirmPassword" type="password" required />
+              </div>
               <div className="flex flex-col gap-3">
                 <Button type="submit" className="w-full">
-                  Anmelden
+                  Registrieren
                 </Button>
               </div>
             </div>
             <div className="mt-4 text-center text-sm">
-              Haben Sie noch kein Konto?{" "}
+              Haben Sie bereits ein Konto?{" "}
               <a href="#" className="underline underline-offset-4">
-                Registrieren
+                Anmelden
               </a>
             </div>
           </form>
