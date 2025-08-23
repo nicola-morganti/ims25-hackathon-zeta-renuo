@@ -2,10 +2,20 @@
 
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Calendar, Clock, MapPin, Train, Settings, LogOut, Upload, Route } from "lucide-react";
+import {
+  Calendar,
+  Clock,
+  MapPin,
+  Train,
+  Settings,
+  LogOut,
+  Upload,
+  Route,
+} from "lucide-react";
+import { resolveLocation } from "@/lib/locationMap";
 
 interface Event {
   id: string;
@@ -15,6 +25,7 @@ interface Event {
   location?: string;
   address?: string;
   color: string;
+  date?: string;
 }
 
 interface SBBConnection {
@@ -28,8 +39,23 @@ interface SBBConnection {
   };
   duration: string;
   sections: Array<{
-    journey?: { category: string };
-    walk?: boolean;
+    journey?: {
+      category: string;
+      number: string;
+      duration?: string;
+    };
+    walk?: {
+      duration?: string;
+    };
+    departure?: {
+      station?: { name: string };
+      departure?: string;
+      platform?: string;
+    };
+    arrival?: {
+      station?: { name: string };
+      arrival?: string;
+    };
   }>;
   price?: string;
 }
@@ -43,6 +69,15 @@ interface TransformedConnection {
   duration: string;
   transport: string[];
   price?: string;
+  sections: Array<{
+    type: string;
+    from?: string;
+    to?: string;
+    departure?: string;
+    arrival?: string;
+    duration?: string;
+    platform?: string;
+  }>;
 }
 
 export default function Dashboard() {
@@ -51,7 +86,68 @@ export default function Dashboard() {
   const [showOvModal, setShowOvModal] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [events, setEvents] = useState<Event[]>([]);
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [viewMode, setViewMode] = useState<"day" | "week">("day");
+  const [selectedLocation, setSelectedLocation] = useState<string>("");
+  const [selectedTime, setSelectedTime] = useState<string>("");
+  const [selectedConnection, setSelectedConnection] =
+    useState<TransformedConnection | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const loadEvents = useCallback(
+    async (date?: Date) => {
+      try {
+        const targetDate = date || selectedDate;
+        const dateString = targetDate.toISOString().split("T")[0];
+        const response = await fetch(
+          `/api/events?date=${dateString}&viewMode=${viewMode}`
+        );
+        const data = await response.json();
+
+        if (response.ok) {
+          const formattedEvents = data.events.map(
+            (event: {
+              id: string;
+              title: string;
+              startTime: string;
+              endTime: string;
+              location?: string;
+              address?: string;
+              color: string;
+            }) => ({
+              id: event.id,
+              title: event.title,
+              startTime: new Date(event.startTime).toLocaleTimeString("de-CH", {
+                hour: "2-digit",
+                minute: "2-digit",
+                hour12: false,
+                timeZone: "Europe/Zurich",
+              }),
+              endTime: new Date(event.endTime).toLocaleTimeString("de-CH", {
+                hour: "2-digit",
+                minute: "2-digit",
+                hour12: false,
+                timeZone: "Europe/Zurich",
+              }),
+              location: event.location,
+              address: event.address,
+              color: event.color,
+              date: new Date(event.startTime).toLocaleDateString("de-CH", {
+                weekday: "short",
+                month: "short",
+                day: "numeric",
+                timeZone: "Europe/Zurich",
+              }),
+            })
+          );
+          setEvents(formattedEvents);
+        }
+      } catch (error) {
+        console.error("Error loading events:", error);
+      }
+    },
+    [selectedDate, viewMode]
+  );
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -59,63 +155,52 @@ export default function Dashboard() {
     } else if (status === "authenticated") {
       loadEvents();
     }
-  }, [status, router]);
+  }, [status, router, loadEvents]);
 
-  const loadEvents = async () => {
-    try {
-      const today = new Date().toISOString().split('T')[0];
-      const response = await fetch(`/api/events?date=${today}`);
-      const data = await response.json();
-      
-      if (response.ok) {
-        const formattedEvents = data.events.map((event: { id: string; title: string; startTime: string; endTime: string; location?: string; address?: string; color: string }) => ({
-          id: event.id,
-          title: event.title,
-          startTime: new Date(event.startTime).toLocaleTimeString('de-CH', { 
-            hour: '2-digit', 
-            minute: '2-digit',
-            hour12: false 
-          }),
-          endTime: new Date(event.endTime).toLocaleTimeString('de-CH', { 
-            hour: '2-digit', 
-            minute: '2-digit',
-            hour12: false 
-          }),
-          location: event.location,
-          address: event.address,
-          color: event.color
-        }));
-        setEvents(formattedEvents);
-      }
-    } catch (error) {
-      console.error("Error loading events:", error);
+  useEffect(() => {
+    if (status === "authenticated") {
+      loadEvents();
     }
-  };
+  }, [viewMode, status, loadEvents]);
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
+  const handleFileUpload = async (file: File) => {
     if (!file) return;
 
+    console.log("Frontend: Uploading file:", file.name);
+
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append("file", file);
 
     try {
-      const response = await fetch('/api/ics/upload', {
-        method: 'POST',
+      const response = await fetch("/api/ics/upload", {
+        method: "POST",
         body: formData,
+        credentials: "include",
       });
 
+      console.log("Frontend: Response status:", response.status);
       const data = await response.json();
+      console.log("Frontend: Response data:", data);
 
       if (response.ok) {
         alert(data.message);
-        loadEvents(); // Reload events after upload
+        loadEvents();
         setShowUploadModal(false);
       } else {
-        alert(data.error || 'Fehler beim Upload');
+        alert(data.error || "Fehler beim Upload");
       }
     } catch (error) {
-      alert('Fehler beim Upload');
+      console.error("Frontend: Upload error:", error);
+      alert("Fehler beim Upload");
+    }
+  };
+
+  const handleFileChange = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      await handleFileUpload(file);
     }
   };
 
@@ -141,9 +226,11 @@ export default function Dashboard() {
               <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
                 <Calendar className="w-5 h-5 text-white" />
               </div>
-              <h1 className="text-xl font-semibold text-gray-900">Stundenplan</h1>
+              <h1 className="text-xl font-semibold text-gray-900">
+                Stundenplan
+              </h1>
             </div>
-            
+
             <div className="flex items-center space-x-4">
               <div className="text-right">
                 <p className="text-sm font-medium text-gray-900">
@@ -170,14 +257,86 @@ export default function Dashboard() {
         {/* Welcome Section */}
         <div className="mb-8">
           <h2 className="text-2xl font-bold text-gray-900 mb-2">
-            Willkommen zurück, {session.user?.name?.split(' ')[0] || 'Student'}! 👋
+            Willkommen zurück, {session.user?.name?.split(" ")[0] || "Student"}!
+            👋
           </h2>
-          <p className="text-gray-600">Hier ist dein Stundenplan für heute</p>
+
+          {/* Date Navigation */}
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center space-x-4">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const newDate = new Date(selectedDate);
+                  newDate.setDate(newDate.getDate() - 1);
+                  setSelectedDate(newDate);
+                  loadEvents(newDate);
+                }}
+              >
+                ← Vorheriger Tag
+              </Button>
+
+              <div className="text-center">
+                <h3 className="text-lg font-semibold text-gray-900">
+                  {selectedDate.toLocaleDateString("de-CH", {
+                    weekday: "long",
+                    year: "numeric",
+                    month: "long",
+                    day: "numeric",
+                  })}
+                </h3>
+              </div>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const newDate = new Date(selectedDate);
+                  newDate.setDate(newDate.getDate() + 1);
+                  setSelectedDate(newDate);
+                  loadEvents(newDate);
+                }}
+              >
+                Nächster Tag →
+              </Button>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <Button
+                variant={viewMode === "day" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setViewMode("day")}
+              >
+                Tag
+              </Button>
+              <Button
+                variant={viewMode === "week" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setViewMode("week")}
+              >
+                Woche
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setSelectedDate(new Date());
+                  loadEvents(new Date());
+                }}
+              >
+                Heute
+              </Button>
+            </div>
+          </div>
         </div>
 
         {/* Quick Actions */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => setShowOvModal(true)}>
+          <Card
+            className="hover:shadow-lg transition-shadow cursor-pointer"
+            onClick={() => setShowOvModal(true)}
+          >
             <CardContent className="p-6">
               <div className="flex items-center space-x-4">
                 <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
@@ -191,14 +350,19 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => setShowUploadModal(true)}>
+          <Card
+            className="hover:shadow-lg transition-shadow cursor-pointer"
+            onClick={() => setShowUploadModal(true)}
+          >
             <CardContent className="p-6">
               <div className="flex items-center space-x-4">
                 <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
                   <Upload className="w-6 h-6 text-green-600" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-gray-900">ICS importieren</h3>
+                  <h3 className="font-semibold text-gray-900">
+                    ICS importieren
+                  </h3>
                   <p className="text-sm text-gray-500">Stundenplan hochladen</p>
                 </div>
               </div>
@@ -225,7 +389,15 @@ export default function Dashboard() {
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
               <Clock className="w-5 h-5" />
-              <span>Heute - {new Date().toLocaleDateString('de-DE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
+              <span>
+                Heute -{" "}
+                {new Date().toLocaleDateString("de-DE", {
+                  weekday: "long",
+                  year: "numeric",
+                  month: "long",
+                  day: "numeric",
+                })}
+              </span>
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -235,12 +407,14 @@ export default function Dashboard() {
                   key={event.id}
                   className="flex items-center p-4 bg-white rounded-lg border border-gray-200 hover:shadow-md transition-shadow"
                 >
-                  <div 
+                  <div
                     className="w-4 h-4 rounded-full mr-4"
                     style={{ backgroundColor: event.color }}
                   ></div>
                   <div className="flex-1">
-                    <h3 className="font-semibold text-gray-900">{event.title}</h3>
+                    <h3 className="font-semibold text-gray-900">
+                      {event.title}
+                    </h3>
                     <div className="flex items-center space-x-4 text-sm text-gray-500">
                       <span className="flex items-center">
                         <Clock className="w-4 h-4 mr-1" />
@@ -254,17 +428,29 @@ export default function Dashboard() {
                       )}
                     </div>
                   </div>
-                                     {event.address && (
-                     <Button 
-                       variant="outline" 
-                       size="sm"
-                       onClick={() => setShowOvModal(true)}
-                       className="flex items-center space-x-1"
-                     >
-                       <Route className="w-3 h-3" />
-                       <span>Route</span>
-                     </Button>
-                   )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      console.log("Route clicked for event:", event);
+                      console.log("Event location:", event.location);
+                      const address = resolveLocation(event.location || "");
+                      console.log("Resolved address:", address);
+                      setSelectedLocation(address || "");
+                      const timeMatch =
+                        event.startTime.match(/(\d{1,2}):(\d{2})/);
+                      const timeForInput = timeMatch
+                        ? `${timeMatch[1].padStart(2, "0")}:${timeMatch[2]}`
+                        : "";
+                      console.log("Time for input:", timeForInput);
+                      setSelectedTime(timeForInput);
+                      setShowOvModal(true);
+                    }}
+                    className="flex items-center space-x-1"
+                  >
+                    <Route className="w-3 h-3" />
+                    <span>Route</span>
+                  </Button>
                 </div>
               ))}
             </div>
@@ -278,11 +464,23 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-7 gap-4">
-              {['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'].map((day) => (
+              {["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"].map((day) => (
                 <div key={day} className="text-center">
-                  <div className="text-sm font-medium text-gray-500 mb-2">{day}</div>
+                  <div className="text-sm font-medium text-gray-500 mb-2">
+                    {day}
+                  </div>
                   <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center text-sm">
-                    {day === 'Mo' ? '3' : day === 'Di' ? '2' : day === 'Mi' ? '4' : day === 'Do' ? '1' : day === 'Fr' ? '2' : '0'}
+                    {day === "Mo"
+                      ? "3"
+                      : day === "Di"
+                      ? "2"
+                      : day === "Mi"
+                      ? "4"
+                      : day === "Do"
+                      ? "1"
+                      : day === "Fr"
+                      ? "2"
+                      : "0"}
                   </div>
                 </div>
               ))}
@@ -291,17 +489,22 @@ export default function Dashboard() {
         </Card>
       </main>
 
-      {/* ÖV Modal */}
+      {/* Connections Modal */}
       {showOvModal && (
-        <OvConnectionModal onClose={() => setShowOvModal(false)} />
+        <OvConnectionModal
+          onClose={() => setShowOvModal(false)}
+          defaultTo={selectedLocation}
+          defaultTime={selectedTime}
+          selectedConnection={selectedConnection}
+          onConnectionSelect={setSelectedConnection}
+        />
       )}
 
       {/* Upload Modal */}
       {showUploadModal && (
-        <UploadModal 
-          onClose={() => setShowUploadModal(false)} 
+        <UploadModal
+          onClose={() => setShowUploadModal(false)}
           onUpload={handleFileUpload}
-          fileInputRef={fileInputRef}
         />
       )}
 
@@ -310,24 +513,33 @@ export default function Dashboard() {
         type="file"
         ref={fileInputRef}
         accept=".ics"
-        onChange={handleFileUpload}
-        style={{ display: 'none' }}
+        onChange={handleFileChange}
+        style={{ display: "none" }}
       />
     </div>
   );
 }
 
-function UploadModal({ 
-  onClose, 
-  onUpload, 
-  fileInputRef 
-}: { 
+function UploadModal({
+  onClose,
+  onUpload,
+}: {
   onClose: () => void;
-  onUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
-  fileInputRef: React.RefObject<HTMLInputElement | null>;
+  onUpload: (file: File) => Promise<void>;
 }) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const handleFileSelect = () => {
     fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      await onUpload(file);
+    }
   };
 
   return (
@@ -342,8 +554,9 @@ function UploadModal({
 
         <div className="space-y-4">
           <p className="text-gray-600">
-            Lade deine ICS-Datei hoch, um deinen Stundenplan zu importieren. 
-            Die Lektionen werden automatisch mit Adressen aus dem locationMap verknüpft.
+            Lade deine ICS-Datei hoch, um deinen Stundenplan zu importieren. Die
+            Lektionen werden automatisch mit Adressen aus dem locationMap
+            verknüpft.
           </p>
 
           <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
@@ -359,64 +572,160 @@ function UploadModal({
             >
               Datei auswählen
             </Button>
-            <Button
-              variant="outline"
-              onClick={onClose}
-              className="flex-1"
-            >
+            <Button variant="outline" onClick={onClose} className="flex-1">
               Abbrechen
             </Button>
           </div>
         </div>
+
+        {/* Hidden file input */}
+        <input
+          type="file"
+          ref={fileInputRef}
+          accept=".ics"
+          onChange={handleFileChange}
+          style={{ display: "none" }}
+        />
       </div>
     </div>
   );
 }
 
-function OvConnectionModal({ onClose }: { onClose: () => void }) {
+function OvConnectionModal({
+  onClose,
+  defaultTo,
+  defaultTime,
+  selectedConnection,
+  onConnectionSelect,
+}: {
+  onClose: () => void;
+  defaultTo?: string;
+  defaultTime?: string;
+  selectedConnection: TransformedConnection | null;
+  onConnectionSelect: (connection: TransformedConnection | null) => void;
+}) {
   const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
+  const [to, setTo] = useState(defaultTo || "");
+  const [departureTime, setDepartureTime] = useState(defaultTime || "");
   const [transportType, setTransportType] = useState("all");
   const [connections, setConnections] = useState<TransformedConnection[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
+  useEffect(() => {
+    console.log("defaultTo changed:", defaultTo);
+    if (defaultTo) {
+      setTo(defaultTo);
+    }
+  }, [defaultTo]);
+
+  useEffect(() => {
+    console.log("defaultTime changed:", defaultTime);
+    if (defaultTime) {
+      setDepartureTime(defaultTime);
+    }
+  }, [defaultTime]);
+
   const handleSearch = async () => {
-    if (!from || !to) {
-      setError("Bitte fülle alle Felder aus");
+    if (!to) {
+      setError("Bitte gib einen Zielort an");
       return;
+    }
+
+    const searchFrom = from || "Zürich HB";
+    if (!from) {
+      setFrom(searchFrom);
     }
 
     setIsLoading(true);
     setError("");
 
     try {
-      const today = new Date().toISOString().split('T')[0];
-      const currentTime = new Date().toLocaleTimeString('de-CH', { 
-        hour: '2-digit', 
-        minute: '2-digit',
-        hour12: false 
-      });
+      const today = new Date().toISOString().split("T")[0];
+      const searchTime =
+        departureTime ||
+        new Date().toLocaleTimeString("de-CH", {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+        });
 
-      const response = await fetch(`/api/sbb?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&date=${today}&time=${currentTime}`);
+      const response = await fetch(
+        `/api/sbb?from=${encodeURIComponent(
+          searchFrom
+        )}&to=${encodeURIComponent(to)}&date=${today}&time=${searchTime}`
+      );
 
       const data = await response.json();
 
       if (response.ok && data.connections) {
-        // Transform SBB API response to our format
-        const transformedConnections = data.connections.slice(0, 5).map((connection: SBBConnection, index: number) => ({
-          id: index.toString(),
-          from: connection.from.station.name,
-          to: connection.to.station.name,
-          departure: connection.from.departure?.slice(11, 16) || connection.from.departure || '',
-          arrival: connection.to.arrival?.slice(11, 16) || connection.to.arrival || '',
-          duration: connection.duration,
-          transport: connection.sections.map((section) => 
-            section.journey?.category || section.walk ? 'Fussweg' : 'Unbekannt'
-          ).filter((transport: string) => transport !== 'Unbekannt'),
-          price: connection.price
-        }));
-        
+        console.log("SBB API response:", data.connections);
+
+        const transformedConnections = data.connections
+          .slice(0, 5)
+          .map((connection: SBBConnection, index: number) => ({
+            id: index.toString(),
+            from: connection.from.station.name,
+            to: connection.to.station.name,
+            departure:
+              connection.from.departure?.slice(11, 16) ||
+              connection.from.departure ||
+              "",
+            arrival:
+              connection.to.arrival?.slice(11, 16) ||
+              connection.to.arrival ||
+              "",
+            duration: connection.duration,
+            transport: connection.sections
+              .map((section) => {
+                if (section.journey) {
+                  return `${section.journey.category}${
+                    section.journey.number || ""
+                  }`.trim();
+                } else if (section.walk) {
+                  return "Fussweg";
+                } else {
+                  return "Unbekannt";
+                }
+              })
+              .filter((t: string) => t !== "Unbekannt"),
+            sections: connection.sections
+              .map((section) => {
+                if (section.journey && section.departure && section.arrival) {
+                  return {
+                    type: `${section.journey.category}${
+                      section.journey.number || ""
+                    }`.trim(),
+                    from: section.departure.station?.name,
+                    to: section.arrival.station?.name,
+                    departure: section.departure.departure?.slice(11, 16),
+                    arrival: section.arrival.arrival?.slice(11, 16),
+                    duration: section.journey.duration,
+                    platform: section.departure.platform,
+                  };
+                } else if (
+                  section.walk &&
+                  section.departure &&
+                  section.arrival
+                ) {
+                  return {
+                    type: "Fussweg",
+                    from: section.departure.station?.name,
+                    to: section.arrival.station?.name,
+                    departure: section.departure.departure?.slice(11, 16),
+                    arrival: section.arrival.arrival?.slice(11, 16),
+                    duration: section.walk.duration,
+                  };
+                } else {
+                  return {
+                    type: "Unbekannt",
+                  };
+                }
+              })
+              .filter((section) => section.type !== "Unbekannt"),
+            price: connection.price,
+          }));
+
         setConnections(transformedConnections);
       } else {
         setError(data.error || "Fehler beim Suchen der Verbindung");
@@ -439,7 +748,7 @@ function OvConnectionModal({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Von
@@ -462,8 +771,35 @@ function OvConnectionModal({ onClose }: { onClose: () => void }) {
                 value={to}
                 onChange={(e) => setTo(e.target.value)}
                 placeholder="Zielort eingeben"
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className={`w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                  defaultTo ? "bg-gray-50" : ""
+                }`}
+                readOnly={!!defaultTo}
               />
+              {defaultTo && (
+                <p className="text-xs text-gray-500 mt-1">
+                  Aus Stundenplan übernommen
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Ankunftszeit
+              </label>
+              <input
+                type="time"
+                value={departureTime}
+                onChange={(e) => setDepartureTime(e.target.value)}
+                className={`w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                  defaultTime ? "bg-gray-50" : ""
+                }`}
+              />
+              {defaultTime && (
+                <p className="text-xs text-gray-500 mt-1">
+                  Aus Stundenplan übernommen
+                </p>
+              )}
             </div>
 
             <div>
@@ -497,11 +833,7 @@ function OvConnectionModal({ onClose }: { onClose: () => void }) {
             >
               {isLoading ? "Suche..." : "Route suchen"}
             </Button>
-            <Button
-              variant="outline"
-              onClick={onClose}
-              className="flex-1"
-            >
+            <Button variant="outline" onClick={onClose} className="flex-1">
               Abbrechen
             </Button>
           </div>
@@ -514,7 +846,18 @@ function OvConnectionModal({ onClose }: { onClose: () => void }) {
                 {connections.map((connection) => (
                   <div
                     key={connection.id}
-                    className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
+                    className={`border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer ${
+                      selectedConnection?.id === connection.id
+                        ? "ring-2 ring-blue-500 bg-blue-50"
+                        : ""
+                    }`}
+                    onClick={() =>
+                      onConnectionSelect(
+                        selectedConnection?.id === connection.id
+                          ? null
+                          : connection
+                      )
+                    }
                   >
                     <div className="flex justify-between items-start">
                       <div className="flex-1">
@@ -530,14 +873,16 @@ function OvConnectionModal({ onClose }: { onClose: () => void }) {
                           {connection.from} → {connection.to}
                         </div>
                         <div className="flex items-center space-x-2">
-                          {connection.transport.map((transport: string, index: number) => (
-                            <span
-                              key={index}
-                              className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full"
-                            >
-                              {transport}
-                            </span>
-                          ))}
+                          {connection.transport.map(
+                            (transport: string, index: number) => (
+                              <span
+                                key={index}
+                                className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full"
+                              >
+                                {transport}
+                              </span>
+                            )
+                          )}
                         </div>
                       </div>
                       {connection.price && (
@@ -548,6 +893,50 @@ function OvConnectionModal({ onClose }: { onClose: () => void }) {
                         </div>
                       )}
                     </div>
+
+                    {/* Connection Details */}
+                    {selectedConnection?.id === connection.id &&
+                      connection.sections && (
+                        <div className="mt-4 pt-4 border-t border-gray-200">
+                          <h4 className="text-sm font-semibold text-gray-700 mb-3">
+                            Verbindungsdetails:
+                          </h4>
+                          <div className="space-y-2">
+                            {connection.sections.map((section, index) => (
+                              <div
+                                key={index}
+                                className="flex items-center space-x-3 text-sm"
+                              >
+                                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-semibold text-xs">
+                                  {section.type === "Fussweg" ? "🚶" : "🚆"}
+                                </div>
+                                <div className="flex-1">
+                                  <div className="font-medium text-gray-900">
+                                    {section.type}
+                                    {section.platform && (
+                                      <span className="text-gray-500 ml-2">
+                                        Gleis {section.platform}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {section.from && section.to && (
+                                    <div className="text-gray-600 text-xs">
+                                      {section.from} → {section.to}
+                                    </div>
+                                  )}
+                                </div>
+                                {section.departure && section.arrival && (
+                                  <div className="text-right text-gray-600">
+                                    <div className="font-medium">
+                                      {section.departure} - {section.arrival}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                   </div>
                 ))}
               </div>

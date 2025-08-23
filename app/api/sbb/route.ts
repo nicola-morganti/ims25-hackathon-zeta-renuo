@@ -7,7 +7,7 @@ export async function GET(req: NextRequest) {
     const to = searchParams.get("to") ?? "";
     const date = searchParams.get("date") ?? "";
     const time = searchParams.get("time") ?? "";
-    const isArrivalTime = searchParams.get("isArrivalTime") ?? "0";
+    const isArrivalTime = "1";
 
     const api = new URL("https://transport.opendata.ch/v1/connections");
     if (from) api.searchParams.set("from", from);
