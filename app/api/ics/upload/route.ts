@@ -6,7 +6,6 @@ import { authOptions } from "@/lib/auth";
 
 export async function POST(req: NextRequest) {
   try {
-    // Get authenticated user
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Nicht angemeldet" }, { status: 401 });
@@ -32,17 +31,15 @@ export async function POST(req: NextRequest) {
     const events = parseICSFile(fileContent, userId);
     console.log("Parsed events:", events);
 
-    // Save events to database with duplicate check
     const savedEvents = [];
     for (const event of events) {
-      // Check for duplicates based on title, startTime, and userId
       const existingEvent = await prisma.event.findFirst({
         where: {
           userId: event.userId,
           title: event.title,
           startTime: {
-            gte: new Date(event.startTime.getTime() - 60000), // 1 minute before
-            lte: new Date(event.startTime.getTime() + 60000)  // 1 minute after
+            gte: new Date(event.startTime.getTime() - 60000),
+            lte: new Date(event.startTime.getTime() + 60000)
           }
         }
       });
@@ -61,7 +58,7 @@ export async function POST(req: NextRequest) {
           address: event.address,
           startTime: event.startTime,
           endTime: event.endTime,
-          color: "#3B82F6" // Default blue color
+          color: "#3B82F6"
         }
       });
       
@@ -120,7 +117,6 @@ function parseICSFile(content: string, userId: string) {
     if (line === 'END:VEVENT') {
       console.log("Ending event:", currentEvent);
       if (currentEvent.title && currentEvent.startTime) {
-        // If no endTime is set, use startTime + 1 hour as default
         const eventWithEndTime: ICSEvent = {
           ...currentEvent as ICSEvent,
           endTime: currentEvent.endTime || new Date(currentEvent.startTime.getTime() + 60 * 60 * 1000)
@@ -146,7 +142,6 @@ function parseICSFile(content: string, userId: string) {
       const location = line.substring(9);
       currentEvent.location = location;
       console.log("Set location:", location);
-      // Resolve location to address using locationMap
       const address = resolveLocation(location);
       if (address) {
         currentEvent.address = address;
@@ -178,9 +173,7 @@ function parseICSFile(content: string, userId: string) {
 }
 
 function parseICSDate(dateStr: string): Date {
-  // Handle different ICS date formats
   if (dateStr.includes('T')) {
-    // Format: 20240115T080000Z or 20240115T080000
     const year = dateStr.substring(0, 4);
     const month = dateStr.substring(4, 6);
     const day = dateStr.substring(6, 8);
@@ -188,13 +181,10 @@ function parseICSDate(dateStr: string): Date {
     const minute = dateStr.substring(11, 13);
     const second = dateStr.substring(13, 15);
     
-    // ICS times need to be adjusted by +2 hours for Swiss time
-    // Add 2 hours to get the correct local time
     const adjustedHour = hour + 2;
     let utcDate: Date;
     
     if (adjustedHour >= 24) {
-      // Handle day rollover
       const nextDay = new Date(`${year}-${month}-${day}`);
       nextDay.setDate(nextDay.getDate() + 1);
       const nextDayStr = nextDay.toISOString().split('T')[0];
@@ -205,7 +195,6 @@ function parseICSDate(dateStr: string): Date {
     
     return utcDate;
   } else {
-    // Format: 20240115
     const year = dateStr.substring(0, 4);
     const month = dateStr.substring(4, 6);
     const day = dateStr.substring(6, 8);

@@ -3,9 +3,8 @@ import { prisma } from "@/lib/prisma";
 
 export async function POST(req: NextRequest) {
   try {
-    const { email, password, name } = await req.json();
+    const { email, password, name, street, houseNumber, postalCode, city } = await req.json();
 
-    // Basic validation
     if (!email || !password) {
       return NextResponse.json(
         { error: "Email and password are required" },
@@ -13,7 +12,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Check if user already exists
     const existingUser = await prisma.user.findUnique({
       where: { email }
     });
@@ -25,12 +23,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Create new user
     const newUser = await prisma.user.create({
       data: {
         email,
-        password, // In production, hash this with bcrypt
-        name: name || null
+        password,
+        name: name || null,
+        street: street || null,
+        houseNumber: houseNumber || null,
+        postalCode: postalCode || null,
+        city: city || null
       }
     });
 
@@ -39,7 +40,11 @@ export async function POST(req: NextRequest) {
       user: {
         id: newUser.id,
         email: newUser.email,
-        name: newUser.name
+        name: newUser.name,
+        street: newUser.street,
+        houseNumber: newUser.houseNumber,
+        postalCode: newUser.postalCode,
+        city: newUser.city
       }
     }, { status: 201 });
 

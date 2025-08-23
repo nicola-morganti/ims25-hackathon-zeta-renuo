@@ -5,7 +5,6 @@ export async function POST(req: NextRequest) {
   try {
     const { email, password } = await req.json();
 
-    // Basic validation
     if (!email || !password) {
       return NextResponse.json(
         { error: "Email and password are required" },

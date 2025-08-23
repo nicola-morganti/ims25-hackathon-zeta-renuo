@@ -15,7 +15,6 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
-        // Use database
         const user = await prisma.user.findUnique({
           where: { email: credentials.email }
         });

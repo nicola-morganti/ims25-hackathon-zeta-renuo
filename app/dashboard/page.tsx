@@ -10,10 +10,10 @@ import {
   Clock,
   MapPin,
   Train,
-  Settings,
   LogOut,
   Upload,
   Route,
+  Settings,
 } from "lucide-react";
 import { resolveLocation } from "@/lib/locationMap";
 
@@ -80,6 +80,13 @@ interface TransformedConnection {
   }>;
 }
 
+interface UserAddress {
+  street?: string;
+  houseNumber?: string;
+  postalCode?: string;
+  city?: string;
+}
+
 export default function Dashboard() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -87,11 +94,11 @@ export default function Dashboard() {
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [events, setEvents] = useState<Event[]>([]);
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [viewMode, setViewMode] = useState<"day" | "week">("day");
   const [selectedLocation, setSelectedLocation] = useState<string>("");
   const [selectedTime, setSelectedTime] = useState<string>("");
   const [selectedConnection, setSelectedConnection] =
     useState<TransformedConnection | null>(null);
+  const [userAddress, setUserAddress] = useState<UserAddress>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const loadEvents = useCallback(
@@ -100,7 +107,7 @@ export default function Dashboard() {
         const targetDate = date || selectedDate;
         const dateString = targetDate.toISOString().split("T")[0];
         const response = await fetch(
-          `/api/events?date=${dateString}&viewMode=${viewMode}`
+          `/api/events?date=${dateString}&viewMode=day`
         );
         const data = await response.json();
 
@@ -146,22 +153,35 @@ export default function Dashboard() {
         console.error("Error loading events:", error);
       }
     },
-    [selectedDate, viewMode]
+    [selectedDate]
   );
+
+  const loadUserAddress = useCallback(async () => {
+    try {
+      const response = await fetch("/api/auth/update-address");
+      if (response.ok) {
+        const data = await response.json();
+        setUserAddress(data.user);
+      }
+    } catch (error) {
+      console.error("Error loading user address:", error);
+    }
+  }, []);
 
   useEffect(() => {
     if (status === "unauthenticated") {
       router.push("/login");
     } else if (status === "authenticated") {
       loadEvents();
+      loadUserAddress();
     }
-  }, [status, router, loadEvents]);
+  }, [status, router, loadEvents, loadUserAddress]);
 
   useEffect(() => {
     if (status === "authenticated") {
       loadEvents();
     }
-  }, [viewMode, status, loadEvents]);
+  }, [status, loadEvents]);
 
   const handleFileUpload = async (file: File) => {
     if (!file) return;
@@ -204,6 +224,13 @@ export default function Dashboard() {
     }
   };
 
+  const getUserAddressString = () => {
+    if (userAddress.street && userAddress.houseNumber && userAddress.postalCode && userAddress.city) {
+      return `${userAddress.street} ${userAddress.houseNumber}, ${userAddress.postalCode} ${userAddress.city}`;
+    }
+    return "";
+  };
+
   if (status === "loading") {
     return (
       <div className="flex justify-center items-center min-h-screen">
@@ -241,6 +268,15 @@ export default function Dashboard() {
               <Button
                 variant="outline"
                 size="sm"
+                onClick={() => router.push("/settings")}
+                className="flex items-center space-x-2"
+              >
+                <Settings className="w-4 h-4" />
+                <span>Einstellungen</span>
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() => signOut({ callbackUrl: "/login" })}
                 className="flex items-center space-x-2"
               >
@@ -257,7 +293,7 @@ export default function Dashboard() {
         {/* Welcome Section */}
         <div className="mb-8">
           <h2 className="text-2xl font-bold text-gray-900 mb-2">
-            Willkommen zurück, {session.user?.name?.split(" ")[0] || "Student"}!
+            Willkommen zurück!
             👋
           </h2>
 
@@ -301,38 +337,11 @@ export default function Dashboard() {
                 Nächster Tag →
               </Button>
             </div>
-
-            <div className="flex items-center space-x-2">
-              <Button
-                variant={viewMode === "day" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setViewMode("day")}
-              >
-                Tag
-              </Button>
-              <Button
-                variant={viewMode === "week" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setViewMode("week")}
-              >
-                Woche
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setSelectedDate(new Date());
-                  loadEvents(new Date());
-                }}
-              >
-                Heute
-              </Button>
-            </div>
           </div>
         </div>
 
         {/* Quick Actions */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
           <Card
             className="hover:shadow-lg transition-shadow cursor-pointer"
             onClick={() => setShowOvModal(true)}
@@ -368,20 +377,6 @@ export default function Dashboard() {
               </div>
             </CardContent>
           </Card>
-
-          <Card className="hover:shadow-lg transition-shadow cursor-pointer">
-            <CardContent className="p-6">
-              <div className="flex items-center space-x-4">
-                <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                  <Settings className="w-6 h-6 text-purple-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900">Einstellungen</h3>
-                  <p className="text-sm text-gray-500">Präferenzen anpassen</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
         </div>
 
         {/* Today's Schedule */}
@@ -390,75 +385,84 @@ export default function Dashboard() {
             <CardTitle className="flex items-center space-x-2">
               <Clock className="w-5 h-5" />
               <span>
-                Heute -{" "}
-                {new Date().toLocaleDateString("de-DE", {
-                  weekday: "long",
-                  year: "numeric",
-                  month: "long",
-                  day: "numeric",
-                })}
+              {selectedDate.toLocaleDateString("de-CH", {
+                    weekday: "long",
+                    year: "numeric",
+                    month: "long",
+                    day: "numeric",
+                  })}
               </span>
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {events.map((event) => (
-                <div
-                  key={event.id}
-                  className="flex items-center p-4 bg-white rounded-lg border border-gray-200 hover:shadow-md transition-shadow"
-                >
-                  <div
-                    className="w-4 h-4 rounded-full mr-4"
-                    style={{ backgroundColor: event.color }}
-                  ></div>
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-gray-900">
-                      {event.title}
-                    </h3>
-                    <div className="flex items-center space-x-4 text-sm text-gray-500">
-                      <span className="flex items-center">
-                        <Clock className="w-4 h-4 mr-1" />
-                        {event.startTime} - {event.endTime}
-                      </span>
-                      {event.location && (
-                        <span className="flex items-center">
-                          <MapPin className="w-4 h-4 mr-1" />
-                          {event.location}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      console.log("Route clicked for event:", event);
-                      console.log("Event location:", event.location);
-                      const address = resolveLocation(event.location || "");
-                      console.log("Resolved address:", address);
-                      setSelectedLocation(address || "");
-                      const timeMatch =
-                        event.startTime.match(/(\d{1,2}):(\d{2})/);
-                      const timeForInput = timeMatch
-                        ? `${timeMatch[1].padStart(2, "0")}:${timeMatch[2]}`
-                        : "";
-                      console.log("Time for input:", timeForInput);
-                      setSelectedTime(timeForInput);
-                      setShowOvModal(true);
-                    }}
-                    className="flex items-center space-x-1"
-                  >
-                    <Route className="w-3 h-3" />
-                    <span>Route</span>
-                  </Button>
+              {events.length === 0 ? (
+                <div className="text-center py-8">
+                  <Clock className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-500 text-lg">Keine Lektionen gefunden</p>
+                  <p className="text-gray-400 text-sm mt-2">
+                    Für diesen Tag sind keine Lektionen geplant
+                  </p>
                 </div>
-              ))}
+              ) : (
+                events.map((event) => (
+                  <div
+                    key={event.id}
+                    className="flex items-center p-4 bg-white rounded-lg border border-gray-200 hover:shadow-md transition-shadow"
+                  >
+                    <div
+                      className="w-4 h-4 rounded-full mr-4"
+                      style={{ backgroundColor: event.color }}
+                    ></div>
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-gray-900">
+                        {event.title}
+                      </h3>
+                      <div className="flex items-center space-x-4 text-sm text-gray-500">
+                        <span className="flex items-center">
+                          <Clock className="w-4 h-4 mr-1" />
+                          {event.startTime} - {event.endTime}
+                        </span>
+                        {event.location && (
+                          <span className="flex items-center">
+                            <MapPin className="w-4 h-4 mr-1" />
+                            {event.location}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        console.log("Route clicked for event:", event);
+                        console.log("Event location:", event.location);
+                        const address = resolveLocation(event.location || "");
+                        console.log("Resolved address:", address);
+                        setSelectedLocation(address || "");
+                        const timeMatch =
+                          event.startTime.match(/(\d{1,2}):(\d{2})/);
+                        const timeForInput = timeMatch
+                          ? `${timeMatch[1].padStart(2, "0")}:${timeMatch[2]}`
+                          : "";
+                        console.log("Time for input:", timeForInput);
+                        setSelectedTime(timeForInput);
+                        setShowOvModal(true);
+                      }}
+                      className="flex items-center space-x-1"
+                    >
+                      <Route className="w-3 h-3" />
+                      <span>Route</span>
+                    </Button>
+                  </div>
+                ))
+              )}
             </div>
           </CardContent>
         </Card>
 
         {/* Weekly Overview */}
-        <Card>
+        {/* <Card>
           <CardHeader>
             <CardTitle>Wochenübersicht</CardTitle>
           </CardHeader>
@@ -486,13 +490,14 @@ export default function Dashboard() {
               ))}
             </div>
           </CardContent>
-        </Card>
+        </Card> */}
       </main>
 
       {/* Connections Modal */}
       {showOvModal && (
         <OvConnectionModal
           onClose={() => setShowOvModal(false)}
+          defaultFrom={getUserAddressString()}
           defaultTo={selectedLocation}
           defaultTime={selectedTime}
           selectedConnection={selectedConnection}
@@ -593,24 +598,33 @@ function UploadModal({
 
 function OvConnectionModal({
   onClose,
+  defaultFrom,
   defaultTo,
   defaultTime,
   selectedConnection,
   onConnectionSelect,
 }: {
   onClose: () => void;
+  defaultFrom?: string;
   defaultTo?: string;
   defaultTime?: string;
   selectedConnection: TransformedConnection | null;
   onConnectionSelect: (connection: TransformedConnection | null) => void;
 }) {
-  const [from, setFrom] = useState("");
+  const [from, setFrom] = useState(defaultFrom || "");
   const [to, setTo] = useState(defaultTo || "");
   const [departureTime, setDepartureTime] = useState(defaultTime || "");
   const [transportType, setTransportType] = useState("all");
   const [connections, setConnections] = useState<TransformedConnection[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    console.log("defaultFrom changed:", defaultFrom);
+    if (defaultFrom) {
+      setFrom(defaultFrom);
+    }
+  }, [defaultFrom]);
 
   useEffect(() => {
     console.log("defaultTo changed:", defaultTo);
@@ -632,7 +646,7 @@ function OvConnectionModal({
       return;
     }
 
-    const searchFrom = from || "Zürich HB";
+    const searchFrom = from || defaultFrom || "Zürich HB";
     if (!from) {
       setFrom(searchFrom);
     }
@@ -731,6 +745,7 @@ function OvConnectionModal({
         setError(data.error || "Fehler beim Suchen der Verbindung");
       }
     } catch (error) {
+      console.error("Error searching for connections:", error);
       setError("Netzwerkfehler");
     } finally {
       setIsLoading(false);
@@ -738,7 +753,7 @@ function OvConnectionModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg p-6 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-semibold">ÖV-Verbindung finden</h2>
@@ -757,9 +772,17 @@ function OvConnectionModal({
                 type="text"
                 value={from}
                 onChange={(e) => setFrom(e.target.value)}
-                placeholder="Startort eingeben"
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Startort"
+                className={`w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                  defaultFrom ? "bg-gray-50" : ""
+                }`}
+                readOnly={!!defaultFrom}
               />
+              {defaultFrom && (
+                <p className="text-xs text-gray-500 mt-1">
+                  Deine gespeicherte Adresse
+                </p>
+              )}
             </div>
 
             <div>
@@ -770,7 +793,7 @@ function OvConnectionModal({
                 type="text"
                 value={to}
                 onChange={(e) => setTo(e.target.value)}
-                placeholder="Zielort eingeben"
+                placeholder="Zielort"
                 className={`w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
                   defaultTo ? "bg-gray-50" : ""
                 }`}

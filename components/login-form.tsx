@@ -24,7 +24,6 @@ export function LoginForm({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // Redirect if already logged in
   useEffect(() => {
     if (session) {
       router.push("/dashboard");
@@ -62,9 +61,9 @@ export function LoginForm({
     <div className={cn("flex flex-col gap-6", className)} {...props}>
       <Card>
         <CardHeader>
-          <CardTitle>Bei Ihrem Konto anmelden</CardTitle>
+          <CardTitle>Bei deinem Konto anmelden</CardTitle>
           <CardDescription>
-            Geben Sie Ihre E-Mail-Adresse ein, um sich bei Ihrem Konto anzumelden
+            Gebe deine E-Mail-Adresse ein, um dich bei deinem Konto anzumelden
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -96,7 +95,7 @@ export function LoginForm({
               </div>
             </div>
             <div className="mt-4 text-center text-sm">
-              Haben Sie noch kein Konto?{" "}
+              Hast du noch kein Konto?{" "}
               <Link href="/register" className="underline underline-offset-4">
                 Registrieren
               </Link>
