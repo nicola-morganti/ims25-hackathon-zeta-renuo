@@ -109,11 +109,6 @@ ims25-hackathon-zeta-renuo/
 
 ## 🚀 Deployment
 
-### Vercel (Empfohlen)
-1. Repository zu Vercel verbinden
-2. Umgebungsvariablen in Vercel Dashboard setzen
-3. Automatisches Deployment bei Git-Push
-
 ### Lokales Production Build
 ```bash
 npm run build
