@@ -1,36 +1,130 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# IMS25 Hackathon - Stundenplan Manager
 
-## Getting Started
+Ein moderner Stundenplan-Manager für Studenten mit integrierter ÖV-Routenplanung, entwickelt im Rahmen des IMS25 Hackathons.
 
-First, run the development server:
+## 🎯 Projektübersicht
 
+Diese Next.js-Anwendung ermöglicht es Studenten, ihren Stundenplan zu verwalten und automatisch ÖV-Verbindungen zu ihren Vorlesungen zu finden. Die App unterstützt den Import von ICS-Dateien und bietet eine intuitive Benutzeroberfläche für die Tagesplanung.
+
+## ✨ Features
+
+### 📅 Stundenplan-Management
+- **ICS-Import**: Automatischer Import von Stundenplandateien (.ics)
+- **Tagesansicht**: Übersichtliche Darstellung der Lektionen pro Tag
+- **Navigation**: Einfache Navigation zwischen verschiedenen Tagen
+- **Farbkodierung**: Individuelle Farben für verschiedene Veranstaltungen
+
+### 👤 Benutzer-Management
+- **Registrierung & Login**: Sichere Authentifizierung mit NextAuth.js
+- **Profilverwaltung**: Speichern von Heimatadresse für automatische Routenplanung
+
+
+## 🛠️ Technologie-Stack
+
+### Frontend
+- **Next.js 15.5.0** - React Framework mit App Router
+- **React 19.1.0** - UI Library
+- **TypeScript** - Typsichere Entwicklung
+- **Tailwind CSS** - Utility-first CSS Framework
+- **Lucide React** - Icon Library
+- **Shadcn/UI** - Components
+
+### Backend & Datenbank
+- **Prisma** - ORM für Datenbankzugriff
+- **SQLite** - Lokale Datenbank
+- **NextAuth.js** - Authentifizierung
+- **Next.js API Routes** - Backend-Endpunkte
+
+### Externe APIs
+- **SBB API** - ÖV-Verbindungen
+- **ICS Parser** - Kalenderdatei-Verarbeitung
+
+## 🚀 Installation & Setup
+
+### Voraussetzungen
+- Node.js 18+ 
+- npm oder yarn
+
+### 1. Repository klonen
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone <repository-url>
+cd ims25-hackathon-zeta-renuo
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. Dependencies installieren
+```bash
+npm install
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 3. Umgebungsvariablen konfigurieren
+Erstelle eine `.env` Datei im Root-Verzeichnis:
+```env
+DATABASE_URL="file:./prisma/dev.db"
+NEXTAUTH_URL="http://localhost:3000"
+NEXTAUTH_SECRET="dein-secret-key-hier"
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 4. Datenbank einrichten
+```bash
+npx prisma migrate dev
+npx prisma generate
+```
 
-## Learn More
+### 5. Entwicklungsserver starten
+```bash
+npm run dev
+```
 
-To learn more about Next.js, take a look at the following resources:
+Die Anwendung ist dann unter [http://localhost:3000](http://localhost:3000) verfügbar.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 📁 Projektstruktur
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```
+ims25-hackathon-zeta-renuo/
+├── app/                    # Next.js App Router
+│   ├── (auth)/            # Authentifizierungsseiten
+│   ├── api/               # API Endpunkte
+│   │   ├── auth/          # Auth API Routes
+│   │   ├── events/        # Event Management
+│   │   ├── ics/           # ICS Import
+│   │   └── sbb/           # SBB API Integration
+│   ├── dashboard/         # Hauptdashboard
+│   └── settings/          # Benutzereinstellungen
+├── components/            # React Komponenten
+│   └── ui/               # UI Komponenten (shadcn/ui)
+├── lib/                  # Utility Funktionen
+│   ├── auth.ts           # NextAuth Konfiguration
+│   ├── prisma.ts         # Prisma Client
+│   └── locationMap.ts    # Adresszuordnung
+├── prisma/               # Datenbankschema
+└── types/                # TypeScript Typen
+```
 
-## Deploy on Vercel
+## 🔐 Sicherheit
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- **Passwort-Hashing**: Sichere Passwort-Speicherung
+- **JWT Sessions**: Sichere Session-Verwaltung
+- **CSRF Protection**: Cross-Site Request Forgery Schutz
+- **Input Validation**: Eingabevalidierung auf Client und Server
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 🚀 Deployment
+
+### Vercel (Empfohlen)
+1. Repository zu Vercel verbinden
+2. Umgebungsvariablen in Vercel Dashboard setzen
+3. Automatisches Deployment bei Git-Push
+
+### Lokales Production Build
+```bash
+npm run build
+npm start
+```
+
+## 📝 License
+
+Dieses Projekt wurde im Rahmen des IMS25 Hackathons entwickelt.
+
+## 👥 Team
+
+Entwickelt von Team Zeta im Rahmen des IMS25 Hackathons.
+
